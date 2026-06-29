@@ -1,0 +1,25 @@
+# 命运2 离线数据库（大文件 + 可重新下载）
+*.sqlite3
+*.content
+*.zip
+.db_version
+
+# 临时分析脚本（已用完可删）
+*.txt
+query_*.py
+find_*.py
+analyze_*.py
+debug_*.py
+schema_report.py
+
+# AI 工作目录
+.omo/
+.codegraph/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Windows
+Thumbs.db

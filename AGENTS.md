@@ -20,35 +20,10 @@ python scripts/download_db.py --check
 ### 1.3 强制更新
 需要最新数据时：`python scripts/download_db.py --force`
 
-## 2. 数据库文件
+## 2. 查询工作流规范
 
-| 文件 | 说明 |
-|---|---|
-| `destiny2_zh-chs.sqlite3` | 简体中文离线 SQLite 数据库（不纳入版本管理） |
-| `.db_version` | 版本缓存文件，记录当前数据库版本 |
-| `scripts/download_db.py` | 数据库下载/更新脚本 |
-
-### 2.1 关键表结构
-
-- `DestinyInventoryItemDefinition`：装备、道具、Perk 插件定义（主表）
-  - `id`（有符号 INT32，对应 JSON 中的无符号 hash 转换而来）
-  - `json`（TEXT，完整 JSON 定义）
-- `DestinySandboxPerkDefinition`：沙盒 Perk 详细描述
-  - `id`（有符号 INT32）
-  - `json`（TEXT）
-- `DestinySocketCategoryDefinition`：插槽分类定义
-- `DestinyPlugSetDefinition`：Perk 池定义（包含 reusablePlugItems）
-
-### 2.2 Perk 查询链路
-
-```
-DestinyInventoryItemDefinition（武器 JSON）
-  → sockets.socketEntries[]
-    → reusablePlugItems[].plugItemHash / randomizedPlugSetHash / reusablePlugSetHash
-      → DestinyInventoryItemDefinition（插件条目，name = Perk 名）
-        → perks[].perkHash
-          → DestinySandboxPerkDefinition（Perk 详细描述）
-```
+- 任何内容都从数据表中获取，**绝对禁止**凭空捏造信息。
+- 查询数据时确保查找所有需要查找的数据，不允许跳过，漏查。
 
 ## 3. 查询结果输出规范
 
@@ -66,10 +41,28 @@ DestinyInventoryItemDefinition（武器 JSON）
 - 大文本使用 `word-break: break-all` 避免溢出
 
 ### 3.3 查询代码规范
+- 通用查询脚本放在scripts/目录下。
+- 临时查询脚本统一放在scripts/temp/目录下，查询完成后**必须**清理删除。
+- 每次执行完查询任务，将查询任务中使用的查询方法提取出来，增加/覆盖/改进现有的通用查询脚本。
+- 写临时查询脚本时，优先使用通用查询脚本。
 - 查询脚本使用 `uv run python` 执行
-- 临时查询脚本存于项目根目录，以 `query_` 为前缀，查询完成后**必须**清理删除
-- 复用查询脚本存于 `scripts/` 目录
 - 优先使用 Python 标准库 `sqlite3` + `json`，不引入额外依赖
+
+### 3.4 通用查询工具
+现有通用工具位于 `scripts/db.py`，提供：
+
+| 函数 | 功能 |
+|---|---|
+| `get_conn()` | 获取数据库连接 |
+| `load_json(val)` | 解析 BLOB/TEXT 为 JSON |
+| `search_perk(cur, keyword)` | 按关键词搜索 Perk（名称+描述） |
+| `search_items(cur, keyword)` | 按关键词搜索物品 |
+| `resolve_perk_name(cur, plug_hash)` | 从 plug hash 解析 Perk 名称 |
+| `resolve_perk_with_description(cur, plug_hash)` | 解析 Perk 名称+效果描述 |
+| `find_weapons_with_perks(cur, plug_hashes)` | 查找含指定 Perk 组合的武器 |
+| `get_weapon_socket_analysis(cur, weapon_id)` | 分析武器所有插槽和 Perk 池 |
+| `SLOT_TYPES` 字典 | 武器槽类型 hash → 名称映射 |
+| `to_signed(hash)` / `to_unsigned(id)` | 有符号/无符号 ID 互转 |
 
 ## 4. 数据库编码注意事项
 

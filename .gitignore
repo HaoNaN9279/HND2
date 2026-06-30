@@ -4,13 +4,8 @@
 *.zip
 .db_version
 
-# 临时分析脚本（已用完可删）
-*.txt
-query_*.py
-find_*.py
-analyze_*.py
-debug_*.py
-schema_report.py
+# 查询结果
+results/*
 
 # AI 工作目录
 .omo/

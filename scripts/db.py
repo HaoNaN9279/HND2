@@ -334,3 +334,78 @@ def get_weapon_socket_analysis(cur, weapon_id: int) -> dict | None:
         "categories": categories,
         "sockets": entries,
     }
+
+
+def get_weapon_perks(cur, weapon_json: str | bytes) -> list[str]:
+    """
+    从武器的 JSON 数据中提取所有插槽中的 Perk 名称列表。
+
+    同时搜索 reusablePlugItems、reusablePlugSetHash、randomizedPlugSetHash。
+    """
+    data = load_json(weapon_json) or {}
+    all_perks: set[str] = set()
+    _seen_plug_hashes: set[int] = set()
+
+    def _resolve_plug_name(plug_hash: int) -> list[str]:
+        if plug_hash in _seen_plug_hashes:
+            return []
+        _seen_plug_hashes.add(plug_hash)
+        result: list[str] = []
+        sid = to_signed(plug_hash)
+        cur.execute("SELECT json FROM DestinyInventoryItemDefinition WHERE id=?", (sid,))
+        row = cur.fetchone()
+        if not row:
+            return result
+        plug = load_json(row[0]) or {}
+
+        # 优先从 sandbox perk 取名称
+        for perk in plug.get("perks", []):
+            pkh = perk.get("perkHash", 0)
+            if pkh:
+                cur.execute("SELECT json FROM DestinySandboxPerkDefinition WHERE id=?", (to_signed(pkh),))
+                spr = cur.fetchone()
+                if spr:
+                    sp_data = load_json(spr[0]) or {}
+                    name = sp_data.get("displayProperties", {}).get("name", "")
+                    if name:
+                        result.append(name)
+
+        # 回退到插件自身的名称
+        if not result:
+            name = plug.get("displayProperties", {}).get("name", "")
+            if name:
+                result.append(name)
+        return result
+
+    def _collect_from_set(set_hash: int):
+        sid = to_signed(set_hash)
+        cur.execute("SELECT json FROM DestinyPlugSetDefinition WHERE id=?", (sid,))
+        ps_row = cur.fetchone()
+        if not ps_row:
+            return
+        ps_data = load_json(ps_row[0]) or {}
+        for pl in ps_data.get("reusablePlugItems", []):
+            ph = pl.get("plugItemHash", 0)
+            if ph:
+                for n in _resolve_plug_name(ph):
+                    all_perks.add(n)
+
+    for entry in data.get("sockets", {}).get("socketEntries", []):
+        # 内联 reusablePlugItems
+        for rp in entry.get("reusablePlugItems", []):
+            ph = rp.get("plugItemHash", 0)
+            if ph:
+                for n in _resolve_plug_name(ph):
+                    all_perks.add(n)
+
+        # reusablePlugSetHash
+        rpsh = entry.get("reusablePlugSetHash", 0)
+        if rpsh:
+            _collect_from_set(rpsh)
+
+        # randomizedPlugSetHash
+        rand_psh = entry.get("randomizedPlugSetHash", 0)
+        if rand_psh:
+            _collect_from_set(rand_psh)
+
+    return list(all_perks)
